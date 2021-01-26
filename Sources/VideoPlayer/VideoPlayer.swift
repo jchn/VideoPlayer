@@ -28,7 +28,7 @@ public struct VideoPlayer {
         case error(NSError)
     }
     
-    private(set) var url: URL
+    @Binding private(set) var url: URL
     
     @Binding private var play: Bool
     @Binding private var time: CMTime
@@ -40,8 +40,8 @@ public struct VideoPlayer {
     ///   - url: http/https URL
     ///   - play: play/pause
     ///   - time: current time
-    public init(url: URL, play: Binding<Bool>, time: Binding<CMTime> = .constant(.zero)) {
-        self.url = url
+    public init(url: Binding<URL>, play: Binding<Bool>, time: Binding<CMTime> = .constant(.zero)) {
+        _url = url
         _play = play
         _time = time
     }
@@ -174,7 +174,16 @@ extension VideoPlayer: UIViewRepresentable {
     }
     
     public func updateUIView(_ uiView: VideoPlayerView, context: Context) {
+        let state: State = uiView.convertState()
+        
+        context.coordinator.stopObserver(uiView: uiView)
+        
         play ? uiView.play(for: url) : uiView.pause(reason: .userInteraction)
+        
+        if case .playing = state {
+            context.coordinator.startObserver(uiView: uiView)
+        }
+        
         uiView.isMuted = config.mute
         uiView.isAutoReplay = config.autoReplay
         
@@ -188,6 +197,12 @@ extension VideoPlayer: UIViewRepresentable {
     }
     
     public class Coordinator: NSObject {
+        // Maybe handling the url change
+        // Should happen in the coordinator
+        // Instead of doing it via the SwiftUI lifecycle
+        
+//        In eerste instantie pas naar volgende video als huidige afgespeeld is
+        
         var videoPlayer: VideoPlayer
         var observer: Any?
         var observerTime: CMTime?
@@ -199,7 +214,7 @@ extension VideoPlayer: UIViewRepresentable {
         
         func startObserver(uiView: VideoPlayerView) {
             guard observer == nil else { return }
-            
+
             observer = uiView.addPeriodicTimeObserver(forInterval: .init(seconds: 0.25, preferredTimescale: 60)) { [weak self, unowned uiView] time in
                 guard let `self` = self else { return }
                 
